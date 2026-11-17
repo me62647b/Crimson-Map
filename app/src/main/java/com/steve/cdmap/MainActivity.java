@@ -2,13 +2,17 @@ package com.steve.cdmap;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.widget.Toast;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -68,8 +72,13 @@ public class MainActivity extends Activity {
     private static final int HTTP_PORT = 47800;
     private static final String START_URL = "https://appassets.androidplatform.net/assets/index.html";
 
+    private static final int REQ_OPEN_FILE = 101;
+    private static final int REQ_SAVE_FILE = 102;
+
     private WebView web;
     private File tilesDir;
+    private ValueCallback<Uri[]> fileCallback;
+    private String pendingSave;
     private SharedPreferences prefs;
 
     @Override
@@ -115,11 +124,52 @@ public class MainActivity extends Activity {
                 return !request.getUrl().toString().startsWith("https://appassets.androidplatform.net/");
             }
         });
-        web.setWebChromeClient(new WebChromeClient()); // enables alert/confirm/prompt dialogs
+        // enables alert/confirm/prompt dialogs and the file picker used by "Restore"
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (fileCallback != null) fileCallback.onReceiveValue(null);
+                fileCallback = callback;
+                try {
+                    Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");
+                    startActivityForResult(Intent.createChooser(i, "Choose a progress backup (.json)"), REQ_OPEN_FILE);
+                    return true;
+                } catch (Exception e) {
+                    fileCallback = null;
+                    return false;
+                }
+            }
+        });
         web.addJavascriptInterface(new Bridge(), "CDApp");
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else web.loadUrl(START_URL);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_OPEN_FILE) {
+            if (fileCallback != null) {
+                Uri[] result = null;
+                if (resultCode == RESULT_OK && data != null && data.getData() != null) result = new Uri[]{data.getData()};
+                fileCallback.onReceiveValue(result);
+                fileCallback = null;
+            }
+        } else if (requestCode == REQ_SAVE_FILE) {
+            String json = pendingSave;
+            pendingSave = null;
+            if (resultCode != RESULT_OK || data == null || data.getData() == null || json == null) return;
+            try (OutputStream os = getContentResolver().openOutputStream(data.getData(), "wt")) {
+                if (os == null) throw new Exception("no stream");
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+                Toast.makeText(this, "Progress backup saved", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Could not save backup: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     @Override
@@ -510,6 +560,24 @@ public class MainActivity extends Activity {
                 }
                 reply(cb, res.toString());
             }).start();
+        }
+
+        /** "Back up progress": let the user pick where to save the backup file. */
+        @JavascriptInterface
+        public void saveBackup(final String json, final String fileName) {
+            runOnUiThread(() -> {
+                pendingSave = json;
+                Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("application/json");
+                i.putExtra(Intent.EXTRA_TITLE, fileName);
+                try {
+                    startActivityForResult(i, REQ_SAVE_FILE);
+                } catch (Exception e) {
+                    pendingSave = null;
+                    Toast.makeText(MainActivity.this, "No file app available to save the backup", Toast.LENGTH_LONG).show();
+                }
+            });
         }
 
         /** This device's id, name and sync code. */
