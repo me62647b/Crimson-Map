@@ -362,21 +362,7 @@ public class MainActivity extends Activity {
                 else respond(s, 200, "application/json", merged.getBytes(StandardCharsets.UTF_8));
             } else if ("GET".equals(method) && "/api/tiles-manifest".equals(path)) {
                 JSONArray files = new JSONArray();
-                int max = 0;
-                File[] zs = tilesDir.listFiles();
-                if (zs != null) for (File z : zs) {
-                    if (!z.isDirectory()) continue;
-                    File[] fs = z.listFiles();
-                    if (fs == null) continue;
-                    for (File f : fs) {
-                        if (!f.getName().endsWith(".webp")) continue;
-                        files.put(z.getName() + "/" + f.getName());
-                        try {
-                            max = Math.max(max, Integer.parseInt(z.getName()));
-                        } catch (Exception ignored) {
-                        }
-                    }
-                }
+                int max = listTiles(tilesDir, "", files);
                 JSONObject o = new JSONObject();
                 o.put("max", max);
                 o.put("files", files);
@@ -407,6 +393,23 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    /** Lists tile files (.webp and info .js) under dir, recursively; returns the highest world zoom folder (top-level number). */
+    private static int listTiles(File dir, String prefix, JSONArray out) {
+        int max = 0;
+        File[] list = dir.listFiles();
+        if (list == null) return 0;
+        for (File f : list) {
+            String rel = prefix + f.getName();
+            if (f.isDirectory()) {
+                listTiles(f, rel + "/", out);
+                if (prefix.isEmpty() && f.getName().matches("[0-9]+")) max = Math.max(max, Integer.parseInt(f.getName()));
+            } else if (rel.endsWith(".webp") || rel.endsWith(".js")) {
+                out.put(rel);
+            }
+        }
+        return max;
     }
 
     /** Hand an incoming sync to the map page; returns the merged state JSON (or null). */
@@ -681,8 +684,11 @@ public class MainActivity extends Activity {
                     //noinspection ResultOfMethodCallIgnored
                     pool.awaitTermination(2, TimeUnit.HOURS);
 
-                    try (FileOutputStream info = new FileOutputStream(new File(tilesDir, "info.js"))) {
-                        info.write(("window.CD_DETAIL_MAX=" + max + ";").getBytes(StandardCharsets.UTF_8));
+                    File worldInfo = new File(tilesDir, "info.js");
+                    if (!worldInfo.exists() && max >= 5) {
+                        try (FileOutputStream info = new FileOutputStream(worldInfo)) {
+                            info.write(("window.CD_DETAIL_MAX=" + max + ";").getBytes(StandardCharsets.UTF_8));
+                        }
                     }
                     prefs.edit().putInt("tileCount", total - failed.get()).putInt("tileMax", max).apply();
                     if (failed.get() > 0)
