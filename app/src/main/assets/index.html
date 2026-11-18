@@ -732,7 +732,7 @@ canvas.leaflet-tile{width:257px!important;height:257px!important}
 .pp .sec{margin-top:8px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 .leaflet-popup-content{max-height:60vh;overflow:auto}
 #stat{color:var(--muted);font-size:12px;margin-top:6px}
-#foot{padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}
+#foot{padding:8px 14px;font-size:12px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}
 #layerSw{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:3px;box-shadow:0 2px 6px #0006}
 #layerSw button{border:0;border-radius:16px;background:transparent;padding:6px 14px;font-weight:600;color:var(--muted)}
 #layerSw button.on{background:#3a3f4b;color:var(--text)}
@@ -765,7 +765,7 @@ canvas.leaflet-tile{width:257px!important;height:257px!important}
       <div id="syncBox" style="display:none;margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:12px"></div>
     </header>
     <div id="cats"></div>
-    <div id="foot">Right-click the map to add your own pin. Data: MetaForge, captured 2026-11 for private use. <span id="dstat"></span></div>
+    <div id="foot"><span id="dstat"></span></div>
   </aside>
   <div id="scrim"></div>
   <div id="map" style="position:relative"><button id="toggle" title="Show/hide sidebar">☰</button><div id="layerSw"><button data-l="0">World</button><button data-l="1">Abyss</button></div><div id="abyssNote"></div><div id="coords"></div></div>
@@ -996,7 +996,8 @@ function updCounts(){let f=0;const T=TOT[VIEW];
   let fa=0;for(const p of PINS)if(S.found[p[0]])fa++;
   document.getElementById('stat').textContent=`${PINS.length.toLocaleString()} pins · ${fa.toLocaleString()} found · ${S.custom.length} custom`;}
 updCounts();
-document.getElementById('dstat').textContent=(DMAX>=5?`High-detail tiles: zoom 5–${DMAX}${DET?' (built in)':''}.`:'High-detail tiles: not found (tiles folder missing).')+(HAS_ABYSS?` Abyss map: zoom 2–${AMAX}.`:' Abyss map: not downloaded.');
+function updTileStat(){const ok=VIEW===1?HAS_ABYSS:DMAX>=5;const el=document.getElementById('dstat');
+  el.innerHTML=`High-Res Tiles: <b style="color:${ok?'#5cb85c':'#e0a040'}">${ok?'Installed':'Missing'}</b>`;}
 
 document.getElementById('hideFound').checked=S.hideFound;
 document.getElementById('hideFound').onchange=e=>{S.hideFound=e.target.checked;save();pins.draw();};
@@ -1010,7 +1011,7 @@ function setLayer(l){VIEW=l;try{localStorage.setItem('cd-view',String(l));}catch
   note.style.display=(l===1&&!HAS_ABYSS)?'block':'none';
   note.textContent='Abyss map images not downloaded yet – run the tile script (or tap Get HD tiles in the app). Pins still work.';
   if(stepMarker&&stepMarker._layer!==l){map.removeLayer(stepMarker);stepMarker=null;}
-  map.closePopup();updCounts();pins.draw();}
+  map.closePopup();updCounts();updTileStat();pins.draw();}
 document.querySelectorAll('#layerSw button').forEach(b=>b.onclick=()=>setLayer(+b.dataset.l));
 setLayer(VIEW);
 document.getElementById('allOff').onclick=()=>{S.on={};document.querySelectorAll('.sub').forEach(d=>d.classList.add('off'));save();pins.draw();};
