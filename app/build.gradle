@@ -10,8 +10,8 @@ android {
         applicationId 'com.steve.cdmap'
         minSdk 24
         targetSdk 34
-        versionCode 3
-        versionName '1.2'
+        versionCode 5
+        versionName '1.4'
     }
 
     // fixed signing key kept in this repo so new builds install over old ones (your progress is kept)
